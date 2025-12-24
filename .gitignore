@@ -1,0 +1,102 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Models (large files - download separately)
+models/
+*.safetensors
+*.onnx
+*.onnx_data
+*.plan
+*.engine
+
+# TensorRT cache
+trt_cache/
+engines/*.plan
+engines/*.engine
+
+# Benchmark results (keep structure, ignore large outputs)
+benchmarks/results/*.json
+
+# Logs
+logs/
+*.log
+
+# Secrets and credentials
+.env
+.env.*
+*.pem
+*.key
+credentials.json
+secrets.yaml
+
+# Docker
+.docker/
+
+# Redis
+dump.rdb
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Audio files (generated)
+*.wav
+*.mp3
+*.flac
+*.ogg
+
+# Large data files
+*.tar
+*.tar.gz
+*.zip
+*.7z
