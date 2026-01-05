@@ -1,0 +1,86 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.eggs
+*.egg-info
+.installed.cfg
+*.egg
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+.conda
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# Testing
+.tox
+.nox
+.coverage
+htmlcov/
+.pytest_cache
+.hypothesis
+
+# Build
+build/
+dist/
+*.manifest
+*.spec
+
+# Jupyter
+.ipynb_checkpoints
+
+# Large files (mount these instead)
+models/
+engines/
+*.safetensors
+*.onnx
+*.plan
+*.bin
+*.pt
+*.pth
+
+# Benchmark results
+benchmarks/results/
+
+# Logs
+*.log
+logs/
+
+# Secrets
+*.env
+.env.*
+secrets/
+credentials/
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.docker
+
+# Documentation (not needed in image)
+docs/
+*.md
+!README.md
+
+# Development
+.claude/
+agents/
+CLAUDE*.md

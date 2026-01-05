@@ -1,0 +1,67 @@
+# Prometheus Configuration for Chatterbox TTS
+#
+# Scrapes metrics from the TTS server and provides alerting rules.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+  # Attach these labels to any time series or alerts
+  external_labels:
+    service: 'chatterbox-tts'
+    environment: 'production'
+
+# Alertmanager configuration (optional)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets:
+#           - alertmanager:9093
+
+# Rule files
+# rule_files:
+#   - "alerts/*.yml"
+
+# Scrape configurations
+scrape_configs:
+  # ==========================================================================
+  # TTS Server Metrics
+  # ==========================================================================
+  - job_name: 'chatterbox-tts'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+    static_configs:
+      - targets: ['tts:8080']
+        labels:
+          instance: 'tts-primary'
+
+    metrics_path: '/metrics'
+
+    # Relabel configs
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        regex: '([^:]+):\d+'
+        replacement: '${1}'
+
+  # ==========================================================================
+  # Redis Metrics (if using redis_exporter)
+  # ==========================================================================
+  # - job_name: 'redis'
+  #   static_configs:
+  #     - targets: ['redis-exporter:9121']
+
+  # ==========================================================================
+  # NVIDIA GPU Metrics (if using dcgm-exporter)
+  # ==========================================================================
+  # - job_name: 'nvidia-gpu'
+  #   static_configs:
+  #     - targets: ['dcgm-exporter:9400']
+
+  # ==========================================================================
+  # Prometheus Self-Monitoring
+  # ==========================================================================
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

@@ -1,0 +1,182 @@
+# Chatterbox TTS Docker Compose
+#
+# Usage:
+#   docker-compose -f docker/docker-compose.yml up -d
+#   docker-compose -f docker/docker-compose.yml logs -f tts
+#   docker-compose -f docker/docker-compose.yml down
+
+version: '3.8'
+
+services:
+  # ===========================================================================
+  # TTS Service
+  # ===========================================================================
+  tts:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: krim-ai/chatterbox-tts:latest
+    container_name: chatterbox-tts
+    restart: unless-stopped
+
+    # GPU access
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    ports:
+      - "8080:8080"
+
+    environment:
+      # GPU
+      - CUDA_VISIBLE_DEVICES=0
+      - NVIDIA_VISIBLE_DEVICES=all
+
+      # Chatterbox
+      - CHATTERBOX_CFG_SCALE=0.5
+
+      # Server
+      - HOST=0.0.0.0
+      - PORT=8080
+      - LOG_LEVEL=info
+      - DEVICE=cuda
+      - USE_TENSORRT=true
+
+      # Redis
+      - REDIS_URL=redis://redis:6379
+      - ENABLE_SPEAKER_CACHE=true
+      - SPEAKER_CACHE_TTL=3600
+
+      # Monitoring
+      - ENABLE_METRICS=true
+
+    volumes:
+      # Mount model files (download first with scripts/setup/download_models.py)
+      - ../models:/app/models:ro
+
+      # Mount TensorRT engines
+      - ../engines:/app/engines:ro
+
+      # Mount configs
+      - ../configs:/app/configs:ro
+
+      # Mount speakers directory (for custom voices)
+      - ../speakers:/app/speakers:ro
+
+    depends_on:
+      redis:
+        condition: service_healthy
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+    networks:
+      - chatterbox-network
+
+  # ===========================================================================
+  # Redis (Speaker Embedding Cache)
+  # ===========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: chatterbox-redis
+    restart: unless-stopped
+
+    ports:
+      - "6379:6379"
+
+    volumes:
+      - redis_data:/data
+
+    command: >
+      redis-server
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --appendonly yes
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - chatterbox-network
+
+  # ===========================================================================
+  # Prometheus (Metrics Collection)
+  # ===========================================================================
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    container_name: chatterbox-prometheus
+    restart: unless-stopped
+
+    ports:
+      - "9090:9090"
+
+    volumes:
+      - ../configs/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
+
+    depends_on:
+      - tts
+
+    networks:
+      - chatterbox-network
+
+  # ===========================================================================
+  # Grafana (Dashboards)
+  # ===========================================================================
+  grafana:
+    image: grafana/grafana:10.1.0
+    container_name: chatterbox-grafana
+    restart: unless-stopped
+
+    ports:
+      - "3000:3000"
+
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ../configs/grafana/provisioning:/etc/grafana/provisioning:ro
+
+    depends_on:
+      - prometheus
+
+    networks:
+      - chatterbox-network
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  chatterbox-network:
+    driver: bridge
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local

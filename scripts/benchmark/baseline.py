@@ -70,26 +70,51 @@ TEST_TEXTS = {
 }
 
 
-def get_system_info() -> Dict:
+def get_device() -> str:
+    """Get the best available device."""
+    import torch
+    if torch.cuda.is_available():
+        return "cuda"
+    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return "mps"  # Apple Silicon
+    return "cpu"
+
+
+def get_system_info(device: str) -> Dict:
     """Get system information"""
     import torch
+    import platform
 
-    gpu_props = torch.cuda.get_device_properties(0)
-    return {
-        "gpu": torch.cuda.get_device_name(0),
-        "gpu_memory_gb": round(gpu_props.total_memory / 1e9, 1),
-        "gpu_compute_capability": f"{gpu_props.major}.{gpu_props.minor}",
-        "cuda_version": torch.version.cuda,
+    info = {
+        "device": device,
         "pytorch_version": torch.__version__,
-        "cudnn_version": str(torch.backends.cudnn.version()),
+        "platform": platform.system(),
+        "processor": platform.processor() or platform.machine(),
     }
+
+    if device == "cuda" and torch.cuda.is_available():
+        gpu_props = torch.cuda.get_device_properties(0)
+        info.update({
+            "gpu": torch.cuda.get_device_name(0),
+            "gpu_memory_gb": round(gpu_props.total_memory / 1e9, 1),
+            "gpu_compute_capability": f"{gpu_props.major}.{gpu_props.minor}",
+            "cuda_version": torch.version.cuda,
+            "cudnn_version": str(torch.backends.cudnn.version()) if torch.backends.cudnn.is_available() else "N/A",
+        })
+    elif device == "mps":
+        info["gpu"] = "Apple Silicon (MPS)"
+    else:
+        info["gpu"] = "None (CPU only)"
+
+    return info
 
 
 def benchmark_text(
     model,
     text: str,
     name: str,
-    config: BenchmarkConfig
+    config: BenchmarkConfig,
+    device: str = "cuda"
 ) -> TextResult:
     """Benchmark a single text input"""
     import torch
@@ -97,26 +122,35 @@ def benchmark_text(
 
     latencies = []
     audio_durations = []
+    use_cuda = device == "cuda" and torch.cuda.is_available()
+
+    def sync():
+        """Synchronize device if needed."""
+        if use_cuda:
+            torch.cuda.synchronize()
+        elif device == "mps":
+            torch.mps.synchronize()
 
     # Warmup runs
     print(f"    Warmup ({config.warmup_runs} runs)...", end=" ", flush=True)
     for _ in range(config.warmup_runs):
         _ = model.generate(text)
-        torch.cuda.synchronize()
+        sync()
     print("done")
 
     # Clear memory stats
-    torch.cuda.reset_peak_memory_stats()
+    if use_cuda:
+        torch.cuda.reset_peak_memory_stats()
 
     # Measurement runs
     print(f"    Measuring ({config.measurement_runs} runs):", flush=True)
     for i in range(config.measurement_runs):
-        torch.cuda.synchronize()
+        sync()
         start = time.perf_counter()
 
         wav = model.generate(text)
 
-        torch.cuda.synchronize()
+        sync()
         end = time.perf_counter()
 
         latency_ms = (end - start) * 1000
@@ -145,6 +179,11 @@ def benchmark_text(
         max_ms=round(float(np.max(latencies)), 1),
     )
 
+    # Get VRAM usage (only on CUDA)
+    vram_gb = 0.0
+    if use_cuda:
+        vram_gb = round(torch.cuda.max_memory_allocated() / 1e9, 2)
+
     return TextResult(
         name=name,
         text=text,
@@ -153,7 +192,7 @@ def benchmark_text(
         audio_duration_s=round(mean_audio_duration, 2),
         latency=latency_stats,
         rtf=round(rtf, 3),
-        vram_peak_gb=round(torch.cuda.max_memory_allocated() / 1e9, 2),
+        vram_peak_gb=vram_gb,
     )
 
 
@@ -164,30 +203,60 @@ def run_baseline_benchmark(config: BenchmarkConfig = None) -> Dict:
     if config is None:
         config = BenchmarkConfig()
 
+    # Detect device
+    device = get_device()
+    use_cuda = device == "cuda" and torch.cuda.is_available()
+
     print("=" * 70)
     print("CHATTERBOX TURBO BASELINE BENCHMARK")
     print("=" * 70)
     print()
 
+    if device != "cuda":
+        print(f"WARNING: Running on {device.upper()}. For accurate benchmarks,")
+        print("         run on AWS G5 (A10G GPU) with CUDA support.")
+        print()
+
     # System info
     print("System Information:")
     print("-" * 70)
-    sys_info = get_system_info()
+    sys_info = get_system_info(device)
     for key, value in sys_info.items():
         print(f"  {key}: {value}")
     print()
 
     # Load model
-    print("Loading Chatterbox Turbo model...")
+    print(f"Loading Chatterbox Turbo model on {device}...")
     print("-" * 70)
     load_start = time.perf_counter()
 
-    from chatterbox import ChatterboxTurboTTS
-    model = ChatterboxTurboTTS.from_pretrained(device="cuda")
+    # Try different import paths for Chatterbox
+    model = None
+    try:
+        # Resemble AI's chatterbox-tts package (newer)
+        from chatterbox.tts import ChatterboxTTS
+        model = ChatterboxTTS.from_pretrained(device=device)
+    except ImportError:
+        try:
+            # Alternative import path
+            from chatterbox import ChatterboxTTS
+            model = ChatterboxTTS.from_pretrained(device=device)
+        except ImportError:
+            print("\nERROR: Chatterbox TTS package not found.")
+            print("\nTo install Resemble AI's Chatterbox:")
+            print("  pip install chatterbox-tts")
+            print("\nOr install from source:")
+            print("  pip install git+https://github.com/resemble-ai/chatterbox.git")
+            print("\nNote: There may be a package name conflict with another 'chatterbox'.")
+            print("If so, uninstall the other one first:")
+            print("  pip uninstall chatterbox")
+            print("  pip install chatterbox-tts")
+            sys.exit(1)
 
     load_time = time.perf_counter() - load_start
     print(f"Model loaded in {load_time:.1f}s")
-    print(f"Initial VRAM usage: {torch.cuda.memory_allocated() / 1e9:.2f} GB")
+    if use_cuda:
+        print(f"Initial VRAM usage: {torch.cuda.memory_allocated() / 1e9:.2f} GB")
     print()
 
     # Run benchmarks
@@ -200,7 +269,7 @@ def run_baseline_benchmark(config: BenchmarkConfig = None) -> Dict:
         print(f"\n  [{name}] ({len(text)} chars, {len(text.split())} words)")
         print(f"    Text: \"{text[:60]}...\"" if len(text) > 60 else f"    Text: \"{text}\"")
 
-        result = benchmark_text(model, text, name, config)
+        result = benchmark_text(model, text, name, config, device=device)
         results.append(result)
 
         print(f"    Result: mean={result.latency.mean_ms:.0f}ms, "
@@ -229,10 +298,12 @@ def run_baseline_benchmark(config: BenchmarkConfig = None) -> Dict:
     print("BENCHMARK SUMMARY")
     print("=" * 70)
     print()
+    print(f"  Device:                {device.upper()}")
     print(f"  Overall Mean Latency:  {summary['overall_mean_latency_ms']:.0f} ms")
     print(f"  Overall P95 Latency:   {summary['overall_p95_latency_ms']:.0f} ms")
     print(f"  Overall Mean RTF:      {summary['overall_mean_rtf']:.3f}")
-    print(f"  Peak VRAM Usage:       {summary['max_vram_gb']:.1f} GB")
+    if use_cuda:
+        print(f"  Peak VRAM Usage:       {summary['max_vram_gb']:.1f} GB")
     print()
 
     if summary['real_time_capable']:

@@ -1,0 +1,159 @@
+# Chatterbox TTS Server Configuration
+# YAML configuration file for advanced settings
+#
+# Note: Environment variables take precedence over this file
+
+# =============================================================================
+# Server Settings
+# =============================================================================
+server:
+  host: "0.0.0.0"
+  port: 8080
+  workers: 1  # Single worker for GPU
+  log_level: "info"
+  debug: false
+
+  # Request timeouts
+  request_timeout_ms: 30000
+  keep_alive_timeout: 120
+
+  # Rate limiting (requests per minute per IP)
+  rate_limit: 100
+
+# =============================================================================
+# Model Settings
+# =============================================================================
+model:
+  # Chatterbox Turbo
+  name: "chatterbox-turbo"
+  version: "1.0"
+
+  # CFG (Classifier-Free Guidance) scale
+  # Controls expressiveness vs stability
+  cfg_scale: 0.5
+
+  # Paths
+  pytorch_path: "models/chatterbox-turbo"
+  onnx_path: "models/onnx/chatterbox-turbo-onnx/onnx"
+  tensorrt_path: "engines"
+
+  # Optimization
+  use_tensorrt: true
+  use_onnx: false
+  use_fp16: true
+
+  # Inference settings
+  max_batch_size: 4
+  max_sequence_length: 512
+
+# =============================================================================
+# Audio Settings
+# =============================================================================
+audio:
+  # Native model output
+  model_sample_rate: 24000
+
+  # Default output settings
+  default_sample_rate: 24000
+  default_format: "wav"
+
+  # Telephony settings
+  telephony_sample_rate: 8000
+  telephony_format: "mulaw"
+
+  # Streaming
+  default_chunk_size_ms: 100
+  min_chunk_size_ms: 20
+  max_chunk_size_ms: 500
+
+  # Limits
+  max_text_length: 2000
+  max_audio_duration_sec: 60
+
+# =============================================================================
+# Speaker Settings
+# =============================================================================
+speakers:
+  # Default speaker embedding
+  default_speaker: "default"
+
+  # Voice cloning settings
+  min_reference_duration_sec: 1.0
+  max_reference_duration_sec: 60.0
+  embedding_dim: 256
+
+  # Preloaded speakers directory
+  preload_dir: "speakers"
+
+# =============================================================================
+# Cache Settings
+# =============================================================================
+cache:
+  # Redis configuration
+  enabled: true
+  redis_url: "redis://localhost:6379"
+
+  # Speaker embedding cache
+  speaker_ttl_seconds: 3600
+  max_cached_speakers: 1000
+
+  # Response cache (optional)
+  response_cache_enabled: false
+  response_cache_ttl_seconds: 300
+
+# =============================================================================
+# Monitoring Settings
+# =============================================================================
+monitoring:
+  # Prometheus metrics
+  metrics_enabled: true
+  metrics_endpoint: "/metrics"
+
+  # Health checks
+  health_endpoint: "/health"
+  liveness_endpoint: "/health/live"
+  readiness_endpoint: "/health/ready"
+
+  # Logging
+  log_format: "json"  # "json" or "text"
+  log_requests: true
+  log_responses: false
+
+# =============================================================================
+# Security Settings
+# =============================================================================
+security:
+  # API key authentication
+  api_key_enabled: false
+  api_key_header: "X-API-Key"
+
+  # CORS
+  cors_enabled: true
+  cors_origins:
+    - "*"
+  cors_methods:
+    - "GET"
+    - "POST"
+    - "DELETE"
+  cors_headers:
+    - "*"
+
+  # Request validation
+  max_request_size_mb: 50
+
+# =============================================================================
+# Performance Targets
+# =============================================================================
+performance:
+  # Latency targets (milliseconds)
+  target_first_chunk_ms: 400
+  target_p95_latency_ms: 500
+
+  # Real-time factor target
+  target_rtf: 0.5
+
+  # Throughput target (requests per second)
+  target_rps: 20
+
+  # VRAM target (GB)
+  target_vram_gb: 16

@@ -48,7 +48,7 @@ else:
 echo ""
 echo "Step 5: Installing Chatterbox TTS..."
 echo "-------------------------------------"
-pip install chatterbox-tts
+pip install git+https://github.com/resemble-ai/chatterbox.git
 
 echo ""
 echo "Step 6: Installing additional dependencies..."
@@ -81,8 +81,12 @@ import torch
 print(f'  [OK] PyTorch {torch.__version__}')
 
 # Chatterbox
-from chatterbox import ChatterboxTurboTTS
-print('  [OK] Chatterbox TTS')
+try:
+    from chatterbox.tts import ChatterboxTTS
+    print('  [OK] Chatterbox TTS')
+except ImportError:
+    from chatterbox import ChatterboxTTS
+    print('  [OK] Chatterbox TTS')
 
 # TensorRT
 try:
