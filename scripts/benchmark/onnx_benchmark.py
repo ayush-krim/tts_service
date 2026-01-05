@@ -147,14 +147,23 @@ def benchmark_onnx_model(
         resolved_shape = []
         for dim in shape:
             if isinstance(dim, str) or dim is None or dim < 0:
-                resolved_shape.append(128)  # Default dynamic dim
+                resolved_shape.append(16)  # Smaller default for speed
             else:
                 resolved_shape.append(dim)
 
-        if "float" in inp.type.lower() or "16" in inp.type.lower():
+        # Determine dtype from ONNX type
+        onnx_type = inp.type.lower()
+        if "float16" in onnx_type or "16" in onnx_type:
+            input_data[inp.name] = np.random.randn(*resolved_shape).astype(np.float16)
+        elif "float" in onnx_type:
             input_data[inp.name] = np.random.randn(*resolved_shape).astype(np.float32)
-        else:
+        elif "int64" in onnx_type:
             input_data[inp.name] = np.random.randint(0, 1000, size=resolved_shape).astype(np.int64)
+        elif "int32" in onnx_type:
+            input_data[inp.name] = np.random.randint(0, 1000, size=resolved_shape).astype(np.int32)
+        else:
+            # Default to float32
+            input_data[inp.name] = np.random.randn(*resolved_shape).astype(np.float32)
 
         print(f"  Input '{inp.name}': shape={resolved_shape}, dtype={input_data[inp.name].dtype}")
 
